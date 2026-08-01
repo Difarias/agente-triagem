@@ -53,3 +53,5 @@ Desenvolver e validar um **agente conversacional inteligente** para apoiar o pro
 ## Entregáveis
 - Protótipo funcional, seguro e clinicamente auditável.  
 - Transformação de formulários estáticos em **interfaces de IA proativas e confiáveis** para o SUS.  
+
+Projeto de Mestrado 2025-2027
