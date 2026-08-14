@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.database import engine, Base
+from fastapi.middleware.cors import CORSMiddleware
 import app.models as models
 from app.routers import auth, atendimentos
 
@@ -10,6 +11,14 @@ app = FastAPI(
     title="Sistema de Triagem Clínica - SESAB",
     description="API do projeto de tese para suporte à decisão em triagem com LLM.",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
 )
 
 app.include_router(auth.router)

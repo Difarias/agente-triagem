@@ -114,3 +114,7 @@ def concluir_atendimento(ate_id: int, dados: AtendimentoConcluir, db: Session = 
     db.refresh(atendimento)
 
     return atendimento
+
+@router.get("/enfermeiro/{enf_id}", response_model=List[AtendimentoResponse])
+def listar_atendimentos_enfermeiro(enf_id: int, db: Session = Depends(get_db)):
+    return db.query(Atendimento).filter(Atendimento.ate_enf_id == enf_id).order_by(Atendimento.ate_criado_em.desc()).all()
