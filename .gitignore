@@ -1,0 +1,25 @@
+# Ambiente virtual Python
+venv/
+ENV/
+env/
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Variáveis de ambiente com senhas
+.env
+
+# Banco Vetorial Local (Gerado via ingest.py)
+chroma_db/
+
+# Dependências e Build do Vue.js (Front-End)
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Arquivos do sistema / IDE
+.vscode/
+.idea/
+.DS_Store

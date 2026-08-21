@@ -1,0 +1,53 @@
+:root {
+  /* TEMA ESCURO (PADRÃO) */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #334155;
+  --bg-chat-user: #1d4ed8;
+  --bg-chat-ia: #334155;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-inverse: #0f172a;
+  --border-color: #334155;
+  --accent-color: #2563eb;
+
+  /* Cores da Triagem SESAB */
+  --vermelho: #dc2626;
+  --amarelo: #d5d906;
+  --verde: #16a34a;
+  --azul: #2563eb;
+}
+
+/* TEMA CLARO - CORRIGIDO */
+[data-theme="light"] {
+  --bg-primary: #f1f5f9;
+  --bg-secondary: #ffffff;
+  --bg-card: #f8fafc;
+  --bg-chat-user: #e0e7ff;
+  --bg-chat-ia: #f1f5f9;
+  --text-main: #0f172a;          /* Escuro para leitura perfeita */
+  --text-muted: #64748b;         /* Cinza médio legível */
+  --text-inverse: #ffffff;
+  --border-color: #e2e8f0;
+  --accent-color: #2563eb;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  height: 100vh;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+}

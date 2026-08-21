@@ -1,0 +1,137 @@
+from langchain_community.vectorstores import Chroma
+from langchain_ollama import OllamaEmbeddings, ChatOllama
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
+from pydantic import BaseModel, Field
+from typing import Optional
+import json
+import re
+from datetime import datetime, date
+
+CHROMA_PATH = "chroma_db"
+
+# Schema de Extração de Dados do Paciente via IA
+class DadosPacienteExtraidos(BaseModel):
+    pac_nome: Optional[str] = Field(None, description="Nome do paciente se mencionado no texto, caso contrário None")
+    pac_sexo: Optional[str] = Field(None, description="Sexo do paciente (Masculino/Feminino) se mencionado, caso contrário None")
+    pac_data_nascimento: Optional[str] = Field(None, description="Data de nascimento no formato YYYY-MM-DD se mencionada/calculada, caso contrário None")
+
+
+class AgenteSusane:
+    def __init__(self):
+        self.embeddings = OllamaEmbeddings(model="nomic-embed-text")
+        self.vector_store = Chroma(
+            persist_directory=CHROMA_PATH,
+            embedding_function=self.embeddings
+        )
+        self.llm = ChatOllama(model="llama3.1", temperature=0.1)
+
+    def gerar_resposta(self, historico_mensagens: list, mensagem_usuario: str) -> str:
+        docs = self.vector_store.similarity_search(mensagem_usuario, k=4)
+        contexto_sesab = "\n\n".join([doc.page_content for doc in docs])
+
+        chat_history = []
+        for msg in historico_mensagens:
+            if msg.msg_remetente == "enfermeiro":
+                chat_history.append(HumanMessage(content=msg.msg_conteudo))
+            elif msg.msg_remetente == "ia":
+                chat_history.append(AIMessage(content=msg.msg_conteudo))
+
+        prompt_system = f"""Você é a **Susane**, assistente virtual de inteligência artificial especialista em Suporte à Decisão para Triagem Clínica, baseada estritamente no Protocolo de Triagem da SESAB (Secretaria de Saúde do Estado da Bahia).
+
+Seu único interlocutor é um ENFERMEIRO DE TRIAGEM.
+
+==================================================
+🚨 GUARDRAIL DE EMERGÊNCIA ABSOLUTA (PRIORIDADE MÁXIMA)
+==================================================
+1. **SINAIS DE ALARME GRAVES (RED FLAGS):**
+   * Se a queixa relatar emergência iminente (ex: suspeita/sensação de Parada Cardíaca, dor torácica opressiva, perda de consciência, anafilaxia, sangramento massivo ou sinais de AVC), **INTERROMPA O QUESTIONÁRIO IMEDIATAMENTE**.
+   * Emita a **SUGESTÃO DE CLASSIFICAÇÃO DE RISCO (VERMELHO)** no primeiro momento.
+
+==================================================
+🛡️ GUARDRAILS DE CONVERSA (ESTRITAMENTE DIRETA)
+==================================================
+1. **SEJA DIRETA - SEM RODEIOS OU COMENTÁRIOS:**
+   * Durante a fase de perguntas, você deve enviar **APENAS A PERGUNTA**.
+   * É PROIBIDO fazer resumos do que já foi dito, justificar o motivo da pergunta ou "pensar alto" (NÃO diga: *"Com base no protocolo...", "O paciente não apresenta...", "Vamos verificar..."*).
+
+2. **UMA PERGUNTA POR VEZ (SEM LISTAS):**
+   * Envie exatamente **UMA ÚNICA PERGUNTA** por mensagem. Não use listas numeradas.
+
+3. **PAPEL EXCLUSIVO:**
+   * Você é quem FORNECE a sugestão de classificação final. NUNCA pergunte ao enfermeiro qual deve ser a classificação.
+
+4. **LIMITAÇÕES TÉCNICAS:**
+   * NUNCA prescreva medicamentos ou emita diagnósticos médicos finais.
+   * Cores válidas: **VERMELHO, AMARELO, VERDE e AZUL**. (Não utilize Laranja).
+
+==================================================
+📋 FLUXO DA CONVERSA E LIMITE DE PERGUNTAS
+==================================================
+- **Passo 1 (Coleta Inicial):** Se não souber, pergunte diretamente pelo **Nome, Idade e Sexo biológico**.
+- **Passo 2 (Investigação - MÁXIMO DE 7 A 8 PERGUNTAS):**
+  * Faça perguntas secas e objetivas sobre: sintomas associados, sinais vitais (PA, FC, Temp, SpO2, Glicemia), intensidade da dor (0 a 10), tempo de evolução e comorbidades.
+  * **ATENÇÃO AO LIMITE:** Ao atingir a 7ª ou 8ª pergunta, você DEVE PARAR de perguntar e avançar OBRIGATORIAMENTE para a Emissão do Resultado.
+- **Passo 3 (Emissão do Resultado Final):** Forneça o bloco estruturado:
+
+---
+### 🚨 SUGESTÃO DE CLASSIFICAÇÃO DE RISCO (SESAB)
+
+* **Nível Sugerido:** [ Vermelho | Amarelo | Verde | Azul ]
+* **Discriminador / Critério:** [Critério exato do protocolo SESAB]
+* **Tempo Máximo de Espera:** [Conforme protocolo SESAB]
+* **Justificativa Clínica:** [Breve resumo cruzando os dados do paciente com o protocolo]
+---
+
+---
+**DIRETRIZES TÉCNICAS DO PROTOCOLO SESAB (BASE VETORIAL):**
+{contexto_sesab}
+---
+"""
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", prompt_system),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{input}")
+        ])
+
+        chain = prompt | self.llm
+        resposta = chain.invoke({
+            "chat_history": chat_history,
+            "input": mensagem_usuario
+        })
+
+        return resposta.content
+
+    def extrair_dados_paciente(self, texto_usuario: str) -> DadosPacienteExtraidos:
+        """ Analisa a mensagem do enfermeiro e extrai Nome, Sexo e Data de Nascimento / Idade. """
+        ano_atual = datetime.now().year
+
+        prompt = f"""Extraia as informações do paciente da mensagem abaixo e responda APENAS em formato JSON válido, sem nenhum texto adicional.
+
+Campos requeridos no JSON:
+- "pac_nome": nome do paciente se citado (senão null)
+- "pac_sexo": "Masculino" ou "Feminino" se citado/subentendido (senão null)
+- "pac_data_nascimento": se a data exata for informada, use "YYYY-MM-DD". Se apenas a idade for informada (ex: 55 anos), calcule o ano aproximado de nascimento mantendo "YYYY-01-01" considerando o ano atual de {ano_atual} (senão null).
+
+Mensagem: "{texto_usuario}"
+
+Exemplo de resposta:
+{{"pac_nome": "Carlos Eduardo", "pac_sexo": "Masculino", "pac_data_nascimento": "1971-01-01"}}
+"""
+        try:
+            resposta = self.llm.invoke(prompt)
+            conteudo = resposta.content.strip()
+            
+            match = re.search(r'\{.*\}', conteudo, re.DOTALL)
+            if match:
+                dados_json = json.loads(match.group(0))
+                return DadosPacienteExtraidos(
+                    pac_nome=dados_json.get("pac_nome"),
+                    pac_sexo=dados_json.get("pac_sexo"),
+                    pac_data_nascimento=dados_json.get("pac_data_nascimento")
+                )
+        except Exception as e:
+            print(f"Erro ao extrair dados do paciente: {e}")
+        
+        return DadosPacienteExtraidos()
