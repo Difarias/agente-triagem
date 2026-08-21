@@ -28,7 +28,7 @@ def iniciar_novo_atendimento(enf_id: int, db: Session = Depends(get_db)):
 
     saudacao_susane = (
         "Olá! Meu nome é Susane e sou sua assistente de suporte à decisão em triagem clínica. "
-        "Estou aqui para te auxiliar! Para começarmos, qual é o nome e o sexo do paciente?"
+        "Estou aqui para te auxiliar! Para começarmos, qual é o nome, idade e o sexo do paciente?"
     )
 
     msg_inicial = MensagemChat(

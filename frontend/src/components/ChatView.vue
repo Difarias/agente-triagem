@@ -1,181 +1,181 @@
 <template>
   <div class="app-layout">
-    <!-- SIDEBAR ESTILO CHATGPT -->
-    <aside class="sidebar-gpt">
-      <!-- HEADER DA SIDEBAR -->
-      <div class="sidebar-header-brand">
-        <div class="brand-info">
-          <span class="brand-logo">🩺</span>
-          <span class="brand-title">Susane Triagem</span>
-        </div>
-      </div>
-
-      <!-- ATALHOS / NAVEGAÇÃO -->
-      <div class="sidebar-navigation">
-        <button class="nav-item btn-novo-chat" @click="iniciarNovoChat" :disabled="carregando">
-          <span class="icon">✏️</span>
-          <span>Novo atendimento</span>
-        </button>
-        <div class="nav-item">
-          <span class="icon">📑</span>
-          <span>Protocolos SESAB</span>
-        </div>
-        <div class="nav-item">
-          <span class="icon">📊</span>
-          <span>Estatísticas</span>
-        </div>
-        <div class="nav-item">
-          <span class="icon">📚</span>
-          <span>Diretrizes Clínicas</span>
-        </div>
-      </div>
-
-      <!-- LISTA DE ATENDIMENTOS (RECENTES) -->
-      <div class="sidebar-recentes">
-        <span class="secao-label">Recentes</span>
-        <ul class="lista-chats">
-          <li 
-            v-for="chat in chats" 
-            :key="chat.ate_id"
-            :class="['chat-item', { active: chatAtual?.ate_id === chat.ate_id }]"
-            @click="selecionarChat(chat)"
-          >
-            <span class="chat-nome" :title="obterNomeExibicao(chat)">
-              {{ obterNomeExibicao(chat) }}
-            </span>
-            <span class="chat-sep">—</span>
-            <span 
-              v-if="chat.ate_classificacao_final" 
-              :class="['chat-status', chat.ate_classificacao_final.toLowerCase()]"
-            >
-              {{ chat.ate_classificacao_final }}
-            </span>
-            <span v-else class="chat-status em-andamento">
-              Em Triagem
-            </span>
-          </li>
-        </ul>
-      </div>
-
-      <!-- RODAPÉ: TEMA + PERFIL DO USUÁRIO -->
-      <div class="sidebar-footer">
-        <button class="btn-theme-toggle" @click="alternarTema">
-          <span class="icon">{{ modoEscuro ? '☀️' : '🌙' }}</span>
-          <span>{{ modoEscuro ? 'Modo Claro' : 'Modo Escuro' }}</span>
-        </button>
-
-        <div class="user-profile-wrapper">
-          <div v-if="menuPerfilAberto" class="profile-popover">
-            <button class="popover-item logout" @click="$emit('logout')">
-              <span>🚪 Sair da conta</span>
-            </button>
-          </div>
-
-          <div class="user-profile-card" @click="menuPerfilAberto = !menuPerfilAberto">
-            <div class="user-avatar">
-              {{ obterIniciais(enfermeiro.enf_nome) }}
-            </div>
-            <div class="user-details">
-              <span class="user-name">{{ enfermeiro.enf_nome }}</span>
-              <span class="user-role">Enfermeiro(a)</span>
-            </div>
-            <span class="user-menu-dots">•••</span>
-          </div>
-        </div>
-      </div>
-    </aside>
-
-    <!-- WORKSPACE PRINCIPAL -->
-    <div class="main-workspace">
-      <!-- CABEÇALHO SUPERIOR -->
-      <header class="top-header">
-        <div class="header-title">
+    <!-- 1. HEADER TOPO-A-TOPO (FULL WIDTH) -->
+    <header class="top-header-full">
+      <div class="header-left">
+        <img src="../assets/mtilab_logo.jpg" alt="Logo MTILab" class="header-logo" v-if="logoExiste" @error="logoExiste = false" />
+        <span v-else class="brand-logo-fallback">🩺</span>
+        
+        <div class="header-brand-title">
           <span class="badge-prototipo">PROTÓTIPO DE VALIDAÇÃO CIENTÍFICA</span>
-          <h1 class="titulo-principal">Copiloto de Triagem Clínica — SESAB</h1>
         </div>
-      </header>
+      </div>
 
-      <!-- GRID DOS PAINÉIS (CHAT + RESUMO) -->
-      <div class="workspace-grid">
-        <!-- PAINEL CENTRAL: CHAT -->
-        <section class="panel-chat">
-          <div class="panel-header">
-            <span>• Histórico de Conversas ({{ mensagens.length }} Interações)</span>
-            <span class="chat-id" v-if="chatAtual">ID: CF-{{ chatAtual.ate_id }}</span>
-          </div>
-
-          <div class="messages-scroll" ref="messagesBox">
-            <div v-if="!chatAtual" class="empty-state">
-              <p>Selecione ou crie um novo atendimento para começar.</p>
-            </div>
-
-            <template v-else>
-              <div 
-                v-for="msg in mensagens" 
-                :key="msg.msg_id"
-                :class="['chat-bubble-row', msg.msg_remetente === 'enfermeiro' ? 'row-profissional' : 'row-ia']"
-              >
-                <div class="chat-bubble">
-                  <!-- NOMES AJUSTADOS E ALINHADOS -->
-                  <span class="bubble-tag">
-                    {{ msg.msg_remetente === 'enfermeiro' ? `👤 ${enfermeiro.enf_nome.toUpperCase()}` : '🤖 SUSANE (COPILOTO IA)' }}
-                  </span>
-                  <div class="bubble-content" v-html="formatarMensagem(msg.msg_conteudo)"></div>
-                </div>
-              </div>
-
-              <div v-if="enviando" class="chat-bubble-row row-ia">
-                <div class="chat-bubble loading">
-                  <span class="bubble-tag">🤖 SUSANE (COPILOTO IA)</span>
-                  <p class="anim-pulse">Analisando sinais clínicos e consultando diretrizes...</p>
-                </div>
-              </div>
-            </template>
-          </div>
-
-          <!-- INPUT DE MENSAGEM -->
-          <div class="chat-input-area" v-if="chatAtual && chatAtual.ate_status !== 'Concluído'">
-            <form @submit.prevent="enviarMensagem">
-              <input 
-                v-model="novaMensagem" 
-                type="text" 
-                placeholder="Informe os sintomas, queixas ou sinais vitais..." 
-                :disabled="enviando"
-              />
-              <button type="submit" :disabled="!novaMensagem.trim() || enviando">Enviar</button>
-            </form>
-          </div>
-        </section>
-
-        <!-- PAINEL DA DIREITA: RESUMO E CLASSIFICAÇÃO -->
-        <section class="panel-summary" v-if="chatAtual">
-          <div :class="['card-classificacao', classifCor.toLowerCase().replace(' ', '-')]">
-            <span class="card-label">CLASSIFICAÇÃO DE RISCO</span>
-            <h2 class="card-status-title">{{ classifCor }}</h2>
-            <p class="card-status-sub">{{ classifTempo }}</p>
-          </div>
-
-          <div class="card-prontuario">
-            <div class="card-header-prontuario">
-              <span>📄 RESUMO ESTRUTURADO PARA PRONTUÁRIO</span>
-            </div>
-            <div class="prontuario-content">
-              <div class="paciente-info-strip" v-if="paciente.pac_nome">
-                <div><strong>Nome:</strong> {{ paciente.pac_nome }}</div>
-                <div><strong>Sexo:</strong> {{ paciente.pac_sexo || 'N/I' }}</div>
-              </div>
-              <div class="prontuario-texto bubble-content" v-html="resumoFormatado"></div>
-            </div>
-          </div>
-
-          <button 
-            v-if="chatAtual.ate_status !== 'Concluído'" 
-            class="btn-concluir-triagem" 
-            @click="modalConclusaoAberto = true"
-          >
-            ✓ Encerramento da Triagem e Classificação
+      <div class="header-right">
+        <span class="sub-title">Copiloto de Apoio à Triagem Clínica</span>
+        
+        <!-- MENU SUSPENSO (DROPDOWN) -->
+        <div class="header-dropdown">
+          <button class="dropdown-btn" @click.stop="menuHeaderAberto = !menuHeaderAberto">
+            ⚙️ Opções ▾
           </button>
-        </section>
+          <ul v-if="menuHeaderAberto" class="dropdown-menu">
+            <li @click="$emit('abrir-sobre')">Sobre</li>
+          </ul>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. CORPO PRINCIPAL (SIDEBAR + WORKSPACE) -->
+    <div class="main-body">
+      <!-- SIDEBAR LATERAL ESTILO CHATGPT -->
+      <aside class="sidebar-gpt">
+        <!-- ATALHOS / NAVEGAÇÃO -->
+        <div class="sidebar-navigation">
+          <button class="nav-item btn-novo-chat" @click="iniciarNovoChat" :disabled="carregando">
+            <span class="icon">✏️</span>
+            <span>Novo atendimento</span>
+          </button>
+        </div>
+
+        <!-- LISTA DE ATENDIMENTOS (RECENTES) -->
+        <div class="sidebar-recentes">
+          <span class="secao-label">Recentes</span>
+          <ul class="lista-chats">
+            <li 
+              v-for="chat in chats" 
+              :key="chat.ate_id"
+              :class="['chat-item', { active: chatAtual?.ate_id === chat.ate_id }]"
+              @click="selecionarChat(chat)"
+            >
+              <span class="chat-nome" :title="obterNomeExibicao(chat)">
+                {{ obterNomeExibicao(chat) }}
+              </span>
+              <span class="chat-sep">—</span>
+              <span 
+                v-if="chat.ate_classificacao_final" 
+                :class="['chat-status', chat.ate_classificacao_final.toLowerCase()]"
+              >
+                {{ chat.ate_classificacao_final }}
+              </span>
+              <span v-else class="chat-status em-andamento">
+                Em Triagem
+              </span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- RODAPÉ DA SIDEBAR: TEMA + PERFIL DO USUÁRIO -->
+        <div class="sidebar-footer">
+          <button class="btn-theme-toggle" @click="alternarTema">
+            <span class="icon">{{ modoEscuro ? '☀️' : '🌙' }}</span>
+            <span>{{ modoEscuro ? 'Modo Claro' : 'Modo Escuro' }}</span>
+          </button>
+
+          <div class="user-profile-wrapper">
+            <div v-if="menuPerfilAberto" class="profile-popover">
+              <button class="popover-item logout" @click="$emit('logout')">
+                <span>🚪 Sair da conta</span>
+              </button>
+            </div>
+
+            <div class="user-profile-card" @click="menuPerfilAberto = !menuPerfilAberto">
+              <div class="user-avatar">
+                {{ obterIniciais(enfermeiro.enf_nome) }}
+              </div>
+              <div class="user-details">
+                <span class="user-name">{{ enfermeiro.enf_nome }}</span>
+                <span class="user-role">Enfermeiro(a)</span>
+              </div>
+              <span class="user-menu-dots">•••</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- WORKSPACE PRINCIPAL -->
+      <div class="main-workspace">
+        <!-- GRID DOS PAINÉIS (CHAT + RESUMO) -->
+        <div class="workspace-grid">
+          <!-- PAINEL CENTRAL: CHAT -->
+          <section class="panel-chat">
+            <div class="panel-header">
+              <span>• Histórico de Conversas ({{ mensagens.length }} Interações)</span>
+              <span class="chat-id" v-if="chatAtual">ID: CF-{{ chatAtual.ate_id }}</span>
+            </div>
+
+            <div class="messages-scroll" ref="messagesBox">
+              <div v-if="!chatAtual" class="empty-state">
+                <p>Selecione ou crie um novo atendimento para começar.</p>
+              </div>
+
+              <template v-else>
+                <div 
+                  v-for="msg in mensagens" 
+                  :key="msg.msg_id"
+                  :class="['chat-bubble-row', msg.msg_remetente === 'enfermeiro' ? 'row-profissional' : 'row-ia']"
+                >
+                  <div class="chat-bubble">
+                    <span class="bubble-tag">
+                      {{ msg.msg_remetente === 'enfermeiro' ? `👤 ${enfermeiro.enf_nome.toUpperCase()}` : '🤖 SUSANE (COPILOTO IA)' }}
+                    </span>
+                    <div class="bubble-content" v-html="formatarMensagem(msg.msg_conteudo)"></div>
+                  </div>
+                </div>
+
+                <div v-if="enviando" class="chat-bubble-row row-ia">
+                  <div class="chat-bubble loading">
+                    <span class="bubble-tag">🤖 SUSANE (COPILOTO IA)</span>
+                    <p class="anim-pulse">Analisando sinais clínicos e consultando diretrizes...</p>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <!-- INPUT DE MENSAGEM -->
+            <div class="chat-input-area" v-if="chatAtual && chatAtual.ate_status !== 'Concluído'">
+              <form @submit.prevent="enviarMensagem">
+                <input 
+                  v-model="novaMensagem" 
+                  type="text" 
+                  placeholder="Informe os sintomas, queixas ou sinais vitais..." 
+                  :disabled="enviando"
+                />
+                <button type="submit" :disabled="!novaMensagem.trim() || enviando">Enviar</button>
+              </form>
+            </div>
+          </section>
+
+          <!-- PAINEL DA DIREITA: RESUMO E CLASSIFICAÇÃO -->
+          <section class="panel-summary" v-if="chatAtual">
+            <div :class="['card-classificacao', classifCor.toLowerCase().replace(' ', '-')]">
+              <span class="card-label">CLASSIFICAÇÃO DE RISCO</span>
+              <h2 class="card-status-title">{{ classifCor }}</h2>
+              <p class="card-status-sub">{{ classifTempo }}</p>
+            </div>
+
+            <div class="card-prontuario">
+              <div class="card-header-prontuario">
+                <span>📄 RESUMO ESTRUTURADO PARA PRONTUÁRIO</span>
+              </div>
+              <div class="prontuario-content">
+                <div class="paciente-info-strip" v-if="paciente.pac_nome">
+                  <div><strong>Nome:</strong> {{ paciente.pac_nome }}</div>
+                  <div><strong>Sexo:</strong> {{ paciente.pac_sexo || 'N/I' }}</div>
+                </div>
+                <div class="prontuario-texto bubble-content" v-html="resumoFormatado"></div>
+              </div>
+            </div>
+
+            <button 
+              v-if="chatAtual.ate_status !== 'Concluído'" 
+              class="btn-concluir-triagem" 
+              @click="modalConclusaoAberto = true"
+            >
+              ✓ Encerramento da Triagem e Classificação
+            </button>
+          </section>
+        </div>
       </div>
     </div>
 
@@ -200,11 +200,12 @@
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { marked } from 'marked';
 import api from '../services/api';
 
@@ -213,6 +214,8 @@ defineEmits(['logout']);
 
 const modoEscuro = ref(false);
 const menuPerfilAberto = ref(false);
+const menuHeaderAberto = ref(false);
+const logoExiste = ref(true);
 
 const chats = ref([]);
 const chatAtual = ref(null);
@@ -228,7 +231,6 @@ const corSelecionada = ref('');
 
 const coresSesab = [
   { nome: 'Vermelho', classe: 'vermelho' },
-  { nome: 'Laranja', classe: 'laranja' },
   { nome: 'Amarelo', classe: 'amarelo' },
   { nome: 'Verde', classe: 'verde' },
   { nome: 'Azul', classe: 'azul' }
@@ -248,17 +250,14 @@ const obterIniciais = (nome) => {
 
 const obterNomeExibicao = (chat) => {
   const nome = chat.paciente?.pac_nome || chat.paciente_nome || '';
-  
-  // Tratamento para evitar que variações de "Em identificação" (com erros de encoding) virem "Paciente #ID"
   const nomeLimpo = nome.toLowerCase();
   const estaPendente = !nome || 
-                       nomeLimpo.includes('identifica') || 
-                       nomeLimpo.includes('identificap');
+                        nomeLimpo.includes('identifica') || 
+                        nomeLimpo.includes('identificap');
 
   if (!estaPendente) {
     return nome;
   }
-  
   return `Atendimento #${chat.ate_id}`;
 };
 
@@ -317,7 +316,6 @@ const enviarMensagem = async () => {
     const res = await api.post(`/atendimentos/${chatAtual.value.ate_id}/mensagens`, { msg_conteudo: texto });
     mensagens.value.push(res.data);
     
-    // Recarrega a lista de chats para atualizar o nome do paciente no menu lateral assim que for identificado pela IA
     await carregarChats();
     const chatAtualizado = chats.value.find(c => c.ate_id === chatAtual.value.ate_id);
     if (chatAtualizado) {
@@ -342,7 +340,7 @@ const concluirAtendimento = async () => {
 
     chatAtual.value.ate_status = res.data.ate_status;
     chatAtual.value.ate_classificacao_final = res.data.ate_classificacao_final;
-    modalConclusaoAberto = false;
+    modalConclusaoAberto.value = false;
     await carregarChats();
   } catch (err) {
     alert("Erro ao concluir atendimento.");
@@ -378,18 +376,179 @@ const resumoFormatado = computed(() => {
   return 'Aguardando informações iniciais do paciente...';
 });
 
+const fecharMenusFora = () => {
+  menuHeaderAberto.value = false;
+};
+
 onMounted(() => {
   document.documentElement.setAttribute('data-theme', 'light');
+  window.addEventListener('click', fecharMenusFora);
   carregarChats();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('click', fecharMenusFora);
 });
 </script>
 
 <style scoped>
+/* CONTAINER GLOBAL DA TELA */
 .app-layout {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100vw;
   background-color: var(--bg-primary);
+  overflow: hidden;
+}
+
+/* ==================================================
+   1. HEADER SUPERIOR FULL-WIDTH (TOPO A TOPO)
+================================================== */
+.top-header-full {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1.2rem;
+  background-color: #1e40af;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  height: 58px;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .top-header-full {
+  background-color: #0f172a;
+  border-bottom: 1px solid #334155;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+/* LOGO MTILAB MAIOR E COM BORDAS ARREDONDADAS */
+.header-logo {
+  height: 42px;
+  width: auto;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.brand-logo-fallback {
+  font-size: 1.4rem;
+}
+
+.header-brand-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.header-brand-title h1 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  color: #ffffff;
+}
+
+.badge-prototipo {
+  font-size: 0.6rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.2);
+  color: #e0f2fe;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.sub-title {
+  font-size: 0.85rem;
+  color: #dbeafe;
+  font-weight: 500;
+}
+
+/* DROPDOWN NO HEADER */
+.header-dropdown {
+  position: relative;
+}
+
+.dropdown-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  padding: 0.35rem 0.8rem;
+  border-radius: 15px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.dropdown-btn:hover {
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 120%;
+  background-color: #ffffff;
+  color: #253b1e;
+  list-style: none;
+  padding: 0.3rem;
+  margin: 0;
+  border-radius: 15px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 140px;
+  z-index: 200;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme="dark"] .dropdown-menu {
+  background-color: #1e293b;
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+.dropdown-menu li {
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.dropdown-menu li:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1e40af;
+}
+
+[data-theme="dark"] .dropdown-menu li:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #38bdf8;
+}
+
+/* ==================================================
+   2. CORPO DA APLICAÇÃO (SIDEBAR + WORKSPACE)
+================================================== */
+.main-body {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - 58px);
   overflow: hidden;
 }
 
@@ -405,38 +564,66 @@ onMounted(() => {
   user-select: none;
 }
 
-.sidebar-header-brand { padding: 0.4rem 0.6rem 0.8rem 0.6rem; }
-.brand-info { display: flex; align-items: center; gap: 0.5rem; }
-.brand-logo { font-size: 1.2rem; }
-.brand-title { font-size: 1rem; font-weight: 700; color: var(--text-main); }
-
 .sidebar-navigation { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 1rem; }
 
+/* BOTAO NOVO ATENDIMENTO */
 .nav-item {
   display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.55rem 0.7rem; border-radius: 8px; font-size: 0.85rem;
-  font-weight: 500; color: var(--text-main); cursor: pointer; transition: background 0.15s;
+  padding: 0.55rem 0.7rem; 
+  border-radius: 15px; 
+  border: 1px solid var(--border-color);
+  font-size: 0.85rem;
+  font-weight: 500; 
+  color: var(--text-main); 
+  cursor: pointer; 
+  transition: all 0.2s ease;
 }
 
-.nav-item:hover { background-color: var(--bg-card); }
-.btn-novo-chat { border: none; background: transparent; width: 100%; text-align: left; }
+.nav-item:hover { 
+  background-color: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .nav-item:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.btn-novo-chat { background: transparent; width: 100%; text-align: left; }
 
 .sidebar-recentes { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
 .secao-label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); padding: 0.4rem 0.7rem; margin-bottom: 0.2rem; }
 .lista-chats { list-style: none; }
 
-/* AJUSTE PARA MANTER NOME E STATUS SEMPRE LADO A LADO NA MESMA LINHA */
+/* BLOCOS DOS ATENDIMENTOS RECENTES */
 .chat-item {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0.55rem 0.7rem;
-  border-radius: 8px;
+  border-radius: 15px;
+  border: 1px solid transparent;
   font-size: 0.8rem;
   cursor: pointer;
-  margin-bottom: 0.15rem;
-  transition: background 0.15s;
-  white-space: nowrap; /* Impede qualquer quebra de linha no item */
+  margin-bottom: 0.25rem;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.chat-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .chat-item:hover {
+  background-color: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.chat-item.active {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+  font-weight: 600;
 }
 
 .chat-nome {
@@ -445,27 +632,26 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1; /* Ocupa todo o espaço disponível sem empurrar o status */
-  min-width: 0; /* Garante que o suporte a reticências (...) funcione corretamente */
+  flex: 1;
+  min-width: 0;
 }
 
 .chat-sep {
   color: var(--text-muted);
   font-size: 0.7rem;
-  flex-shrink: 0; /* Não deixa o traço encolher */
+  flex-shrink: 0;
 }
 
 .chat-status {
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  white-space: nowrap; /* Não deixa "EM TRIAGEM" quebrar para baixo */
-  flex-shrink: 0; /* Mantém o status sempre visível no tamanho original */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .chat-status.em-andamento { color: var(--text-muted); }
 .chat-status.vermelho { color: var(--vermelho); }
-.chat-status.laranja { color: var(--laranja); }
 .chat-status.amarelo { color: var(--amarelo); }
 .chat-status.verde { color: var(--verde); }
 .chat-status.azul { color: var(--azul); }
@@ -477,20 +663,41 @@ onMounted(() => {
 
 .btn-theme-toggle {
   display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.5rem 0.7rem; border-radius: 8px; border: none;
+  padding: 0.5rem 0.7rem; border-radius: 15px; border: 1px solid transparent;
   background: transparent; color: var(--text-main); font-size: 0.85rem;
-  cursor: pointer; width: 100%;
+  cursor: pointer; width: 100%; transition: all 0.2s ease;
 }
 
-.btn-theme-toggle:hover { background-color: var(--bg-card); }
+.btn-theme-toggle:hover { 
+  background-color: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+}
 
+[data-theme="dark"] .btn-theme-toggle:hover {
+  background-color: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* CARD DO PERFIL DO USUÁRIO */
 .user-profile-wrapper { position: relative; }
 .user-profile-card {
   display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.5rem 0.6rem; border-radius: 8px; cursor: pointer; transition: background 0.15s;
+  padding: 0.5rem 0.6rem; 
+  border-radius: 15px; 
+  border: 1px solid transparent;
+  cursor: pointer; 
+  transition: all 0.2s ease;
 }
 
-.user-profile-card:hover { background-color: var(--bg-card); }
+.user-profile-card:hover { 
+  background-color: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="dark"] .user-profile-card:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.12);
+}
 
 .user-avatar {
   width: 32px; height: 32px; border-radius: 50%;
@@ -506,34 +713,22 @@ onMounted(() => {
 .profile-popover {
   position: absolute; bottom: 110%; left: 0; width: 100%;
   background-color: var(--bg-secondary); border: 1px solid var(--border-color);
-  border-radius: 8px; padding: 0.3rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 50;
+  border-radius: 15px; padding: 0.3rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 50;
 }
 
 .popover-item {
-  width: 100%; padding: 0.5rem 0.7rem; border: none; background: transparent;
+  width: 100%; padding: 0.5rem 0.7rem; border: 1px solid transparent; background: transparent;
   color: var(--vermelho); font-weight: 600; font-size: 0.8rem; text-align: left;
-  border-radius: 6px; cursor: pointer;
+  border-radius: 15px; cursor: pointer; transition: all 0.2s ease;
 }
 
-.popover-item:hover { background-color: var(--bg-card); }
+.popover-item:hover { 
+  background-color: rgba(239, 68, 68, 0.1); 
+  border-color: rgba(239, 68, 68, 0.2);
+}
 
 /* WORKSPACE */
 .main-workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-
-.top-header {
-  padding: 0.6rem 1.2rem; background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color); display: flex;
-  justify-content: space-between; align-items: center;
-}
-
-.badge-prototipo {
-  font-size: 0.6rem; font-weight: 700; background: #e0f2fe; color: #0369a1;
-  padding: 0.15rem 0.5rem; border-radius: 10px; border: 1px solid #bae6fd;
-}
-
-[data-theme="dark"] .badge-prototipo { background: #1e293b; color: #38bdf8; border-color: #0284c7; }
-
-.titulo-principal { font-size: 1rem; font-weight: 700; color: var(--text-main); margin-top: 0.1rem; }
 
 .workspace-grid {
   flex: 1; display: grid; grid-template-columns: 1fr 320px;
@@ -555,9 +750,17 @@ onMounted(() => {
   flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;
 }
 
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
 .chat-bubble-row { display: flex; width: 100%; }
 
-/* ALINHAMENTOS DAS CAIXAS E TAGS */
 .row-profissional { justify-content: flex-end; }
 .row-ia { justify-content: flex-start; }
 
@@ -578,11 +781,9 @@ onMounted(() => {
   font-size: 0.65rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 0.25rem;
 }
 
-/* ALINHAMENTO DAS TAGS */
 .row-profissional .bubble-tag { text-align: right; }
 .row-ia .bubble-tag { text-align: left; }
 
-/* ESTILIZAÇÃO DO CONTEÚDO MARKDOWN (CORREÇÃO DE FORMATO DENTRO DAS BOLHAS E PRONTUÁRIO) */
 .bubble-content {
   line-height: 1.5;
   font-size: 0.85rem;
@@ -627,13 +828,18 @@ onMounted(() => {
 .chat-input-area form { display: flex; gap: 0.5rem; }
 
 .chat-input-area input {
-  flex: 1; padding: 0.5rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color);
+  flex: 1; padding: 0.5rem 0.8rem; border-radius: 15px; border: 1px solid var(--border-color);
   background: var(--bg-primary); color: var(--text-main); font-size: 0.85rem;
 }
 
 .chat-input-area button {
   padding: 0 1rem; background: var(--accent-color); color: white;
-  border: none; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+  border: none; border-radius: 15px; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.chat-input-area button:hover {
+  opacity: 0.9;
 }
 
 /* PAINEL DIREITO */
@@ -658,7 +864,7 @@ onMounted(() => {
 
 .card-prontuario {
   flex: 1; background-color: var(--bg-secondary); border: 1px solid var(--border-color);
-  border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 15px; display: flex; flex-direction: column; overflow: hidden;
 }
 
 .card-header-prontuario { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border-color); font-size: 0.7rem; font-weight: 700; color: var(--text-muted); }
@@ -671,26 +877,30 @@ onMounted(() => {
 
 .btn-concluir-triagem {
   padding: 0.7rem; background-color: var(--verde); color: white; border: none;
-  border-radius: 8px; font-weight: bold; font-size: 0.8rem; cursor: pointer;
+  border-radius: 15px; font-weight: bold; font-size: 0.8rem; cursor: pointer; transition: opacity 0.2s;
 }
 
-/* MODAL */
+.btn-concluir-triagem:hover {
+  opacity: 0.9;
+}
+
+/* MODAIS */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-  display: flex; justify-content: center; align-items: center; z-index: 100;
+  display: flex; justify-content: center; align-items: center; z-index: 1000;
 }
 .modal-card {
-  background: var(--bg-secondary); padding: 1.2rem; border-radius: 8px; width: 360px;
-  border: 1px solid var(--border-color); color: var(--text-main);
+  background: var(--bg-secondary); padding: 1.2rem; border-radius: 15px; width: 380px;
+  border: 1px solid var(--border-color); color: var(--text-main); box-shadow: 0 10px 25px rgba(0,0,0,0.2);
 }
 .color-options { display: flex; flex-direction: column; gap: 0.4rem; margin: 1rem 0; }
-.btn-cor { padding: 0.5rem; border-radius: 6px; border: none; color: white; font-weight: bold; cursor: pointer; }
+.btn-cor { padding: 0.5rem; border-radius: 15px; border: none; color: white; font-weight: bold; cursor: pointer; }
 .btn-cor.vermelho { background: var(--vermelho); }
 .btn-cor.laranja { background: var(--laranja); }
 .btn-cor.amarelo { background: var(--amarelo); color: black; }
 .btn-cor.verde { background: var(--verde); }
 .btn-cor.azul { background: var(--azul); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
-.btn-cancel, .btn-confirm { padding: 0.4rem 0.8rem; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem; }
-.btn-confirm { background: var(--accent-color); color: white; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+.btn-cancel, .btn-confirm { padding: 0.4rem 0.8rem; border-radius: 15px; border: none; cursor: pointer; font-size: 0.8rem; }
+.btn-confirm { background: var(--accent-color, #1e40af); color: white; }
 </style>
