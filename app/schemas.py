@@ -43,30 +43,30 @@ class AtendimentoCreate(BaseModel):
     pac_sexo: str
     ate_dados_iniciais: str
 
-class AtendimentoResponse(BaseModel):
-    ate_id: int
-    ate_enf_id: int
-    ate_pac_id: int
-    ate_dados_iniciais: str
-    ate_classificacao_final: Optional[str] = None
-    ate_criado_em: datetime
+class AtendimentoConcluir(BaseModel):
+    ate_classificacao_final: str # Ex: "Vermelho", "Laranja", "Amarelo", "Verde", "Azul"
+
+# Schema do Paciente
+class PacienteResponse(BaseModel):
+    pac_id: int
+    pac_nome: str
+    pac_sexo: Optional[str] = None
+    pac_data_nascimento: Optional[date] = None
 
     class Config:
         from_attributes = True
 
-# Schema para requisição de Conclusão
-class AtendimentoConcluir(BaseModel):
-    ate_classificacao_final: str # Ex: "Vermelho", "Laranja", "Amarelo", "Verde", "Azul"
-
-# Schema de Resposta Completa do Atendimento
+# SCHEMA ÚNICO E CORRIGIDO DE ATENDIMENTO
 class AtendimentoResponse(BaseModel):
     ate_id: int
     ate_enf_id: int
     ate_pac_id: int
-    ate_status: str
+    ate_status: Optional[str] = "Em Triagem"
+    ate_dados_iniciais: Optional[str] = None  # <--- CAMPO LIBERADO PARA O FRONT-END
     ate_classificacao_final: Optional[str] = None
     ate_criado_em: datetime
     ate_concluido_em: Optional[datetime] = None
+    paciente: Optional[PacienteResponse] = None
 
     class Config:
         from_attributes = True

@@ -42,6 +42,8 @@ def iniciar_novo_atendimento(enf_id: int, db: Session = Depends(get_db)):
     return novo_atendimento
 
 
+# NO ARQUIVO app/routers/atendimentos.py, SUBSTITUA O ENDPOINT enviar_mensagem_chat POR ESTE:
+
 @router.post("/{ate_id}/mensagens", response_model=MensagemResponse)
 def enviar_mensagem_chat(ate_id: int, dados: MensagemCreate, db: Session = Depends(get_db)):
     atendimento = db.query(Atendimento).filter(Atendimento.ate_id == ate_id).first()
@@ -62,7 +64,6 @@ def enviar_mensagem_chat(ate_id: int, dados: MensagemCreate, db: Session = Depen
     if paciente:
         dados_extraidos = agente.extrair_dados_paciente(dados.msg_conteudo)
         
-        # Atualiza apenas se o dado foi encontrado e o registro ainda estava padrão
         if dados_extraidos.pac_nome and paciente.pac_nome == "Em identificação":
             paciente.pac_nome = dados_extraidos.pac_nome
         if dados_extraidos.pac_sexo and not paciente.pac_sexo:
@@ -75,7 +76,7 @@ def enviar_mensagem_chat(ate_id: int, dados: MensagemCreate, db: Session = Depen
         
         db.commit()
 
-    # 3. Busca histórico e gera resposta da Susane
+    # 3. Busca histórico e gera resposta da Susane para o CHAT
     historico = db.query(MensagemChat).filter(MensagemChat.msg_ate_id == ate_id).order_by(MensagemChat.msg_criado_em.asc()).all()
 
     resposta_ia = agente.gerar_resposta(
@@ -83,7 +84,7 @@ def enviar_mensagem_chat(ate_id: int, dados: MensagemCreate, db: Session = Depen
         mensagem_usuario=dados.msg_conteudo
     )
 
-    # 4. Salva resposta da IA
+    # 4. Salva resposta da IA no chat
     msg_ia = MensagemChat(
         msg_ate_id=ate_id,
         msg_remetente="ia",
@@ -92,6 +93,13 @@ def enviar_mensagem_chat(ate_id: int, dados: MensagemCreate, db: Session = Depen
     db.add(msg_ia)
     db.commit()
     db.refresh(msg_ia)
+
+    # 5. ATUALIZA O RESUMO DO PRONTUÁRIO NA TABELA DE ATENDIMENTO
+    historico_completo = db.query(MensagemChat).filter(MensagemChat.msg_ate_id == ate_id).order_by(MensagemChat.msg_criado_em.asc()).all()
+    resumo_clinico = agente.gerar_resumo_prontuario(historico_completo)
+    
+    atendimento.ate_dados_iniciais = resumo_clinico
+    db.commit()
 
     return msg_ia
 
