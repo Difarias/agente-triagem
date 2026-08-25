@@ -41,7 +41,7 @@
         <!-- LISTA DE ATENDIMENTOS (RECENTES) -->
         <div class="sidebar-recentes">
           <span class="secao-label">Recentes</span>
-          <ul class="lista-chats">
+          <ul class="lista-chats" :key="chats.length">
             <li 
               v-for="chat in chats" 
               :key="chat.ate_id"
@@ -264,20 +264,41 @@ const obterNomeExibicao = (chat) => {
 const carregarChats = async () => {
   try {
     const res = await api.get(`/atendimentos/enfermeiro/${props.enfermeiro.enf_id}`);
-    chats.value = res.data;
+    // Força a substituição do valor criando uma nova referência do Array
+    chats.value = [...res.data];
+    console.log("Chats carregados do banco:", chats.value);
   } catch (err) {
     console.error("Erro ao carregar chats:", err);
   }
 };
 
 const iniciarNovoChat = async () => {
+  if (carregando.value) return;
   carregando.value = true;
+
   try {
+    // 1. Cria no backend
     const res = await api.post(`/atendimentos/novo/${props.enfermeiro.enf_id}`);
+    console.log("Resposta do POST /novo:", res.data);
+    
+    // 2. Monta o objeto completo
+    const novoChat = {
+      ...res.data,
+      paciente: res.data.paciente || { pac_nome: 'Em identificação' }
+    };
+
+    // 3. Força a criação de um NOVO ARRAY para o Vue detectar a mudança na interface
+    chats.value = [novoChat, ...chats.value];
+
+    // 4. Seleciona o chat e busca mensagens
+    chatAtual.value = novoChat;
+    paciente.value = novoChat.paciente;
+    await carregarMensagens(novoChat.ate_id);
+
+    // 5. Re-busca do banco para garantir integridade
     await carregarChats();
-    const novoChat = chats.value.find(c => c.ate_id === res.data.ate_id) || res.data;
-    selecionarChat(novoChat);
   } catch (err) {
+    console.error("Erro ao iniciar chat:", err);
     alert("Erro ao iniciar novo atendimento.");
   } finally {
     carregando.value = false;
@@ -316,11 +337,16 @@ const enviarMensagem = async () => {
     const res = await api.post(`/atendimentos/${chatAtual.value.ate_id}/mensagens`, { msg_conteudo: texto });
     mensagens.value.push(res.data);
     
+    // 1. Recarrega a lista do banco
     await carregarChats();
-    const chatAtualizado = chats.value.find(c => c.ate_id === chatAtual.value.ate_id);
-    if (chatAtualizado) {
-      chatAtual.value = chatAtualizado;
-      paciente.value = chatAtualizado.paciente || {};
+    
+    // 2. Garante a reatividade forçada criando um novo objeto atualizado
+    const chatEncontrado = chats.value.find(c => c.ate_id === chatAtual.value.ate_id);
+    if (chatEncontrado) {
+      chatAtual.value = { ...chatEncontrado };
+      if (chatEncontrado.paciente) {
+        paciente.value = chatEncontrado.paciente;
+      }
     }
   } catch (err) {
     alert("Erro ao enviar mensagem.");
@@ -338,11 +364,16 @@ const concluirAtendimento = async () => {
       ate_classificacao_final: corSelecionada.value
     });
 
-    chatAtual.value.ate_status = res.data.ate_status;
-    chatAtual.value.ate_classificacao_final = res.data.ate_classificacao_final;
+    // Atualiza o objeto do chat ativo com todos os dados retornados pelo backend
+    chatAtual.value = {
+      ...chatAtual.value,
+      ...res.data
+    };
+
     modalConclusaoAberto.value = false;
     await carregarChats();
   } catch (err) {
+    console.error("Erro ao concluir atendimento:", err);
     alert("Erro ao concluir atendimento.");
   }
 };
@@ -360,25 +391,36 @@ const classifCor = computed(() => chatAtual.value?.ate_classificacao_final || 'E
 const classifTempo = computed(() => {
   const cor = classifCor.value.toLowerCase();
   if (cor === 'vermelho') return 'Emergência - Atendimento Imediato (0 min)';
-  if (cor === 'laranja') return 'Muito Urgente - Atendimento em até 10 minutos';
   if (cor === 'amarelo') return 'Urgência - Atendimento em até 60 minutos';
   if (cor === 'verde') return 'Pouco Urgente - Atendimento em até 120 minutos';
   if (cor === 'azul') return 'Não Urgente - Atendimento em até 240 minutos';
   return 'Coletando sintomas para classificação...';
 });
 
+
 const resumoFormatado = computed(() => {
-  if (mensagens.value.length === 0) return 'Nenhuma informação registrada ainda.';
-  const ultimasIA = mensagens.value.filter(m => m.msg_remetente === 'ia');
-  if (ultimasIA.length > 0) {
-    return marked.parse(ultimasIA[ultimasIA.length - 1].msg_conteudo);
+  if (!chatAtual.value) return 'Selecione um atendimento.';
+  
+  // Pega o campo exato onde seu backend salva o resumo da IA
+  const texto = chatAtual.value.ate_dados_iniciais;
+
+  if (texto && texto.trim() !== '') {
+    return marked.parse(texto);
   }
-  return 'Aguardando informações iniciais do paciente...';
+  
+  return 'Aguardando informações do atendimento...';
 });
 
-const fecharMenusFora = () => {
-  menuHeaderAberto.value = false;
+const fecharMenusFora = (e) => {
+  if (!e.target.closest('.header-dropdown')) menuHeaderAberto.value = false;
+  if (!e.target.closest('.user-profile-wrapper')) menuPerfilAberto.value = false;
 };
+
+onMounted(() => {
+  document.documentElement.setAttribute('data-theme', 'light');
+  window.addEventListener('click', fecharMenusFora);
+  carregarChats();
+});
 
 onMounted(() => {
   document.documentElement.setAttribute('data-theme', 'light');

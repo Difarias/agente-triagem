@@ -5,7 +5,7 @@
       <div class="form-wrapper">
         <!-- CABEÇALHO DO FORMULÁRIO -->
         <div class="brand-header">
-          <span class="brand-icon">🩺</span>
+          <img src="../assets/logo_susane.png" alt="Logo" class="brand-icon-img" />
           <h1 class="brand-title">Susane Triagem</h1>
           <p class="brand-subtitle">Suporte à Decisão Clínica com Inteligência Artificial</p>
         </div>
@@ -190,11 +190,12 @@ const handleSubmit = async () => {
   margin-bottom: 2rem;
 }
 
-.brand-icon {
-  font-size: 2rem; /* Tamanho reduzido para não poluir */
-  line-height: 1; /* Elimina a folga vertical padrão de linha de texto */
-  display: inline-block;
-  margin: 0;
+.brand-icon-img {
+  width: 70px;
+  height: 60px;
+  object-fit: cover;
+  margin-bottom: 0.5rem;
+  mix-blend-mode: multiply; /* Faz o fundo branco da imagem sumir */
 }
 
 .brand-title {
