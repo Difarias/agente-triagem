@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
-from app.database import get_db
-from app.models import Atendimento, Paciente, MensagemChat
-from app.schemas import AtendimentoResponse, MensagemCreate, MensagemResponse, AtendimentoConcluir
-from app.services.rag_service import AgenteSusane
+from ..database import get_db
+from ..models import Atendimento, Paciente, MensagemChat
+from ..schemas import AtendimentoResponse, MensagemCreate, MensagemResponse, AtendimentoConcluir
+from ..services.rag_service import AgenteSusane
 
 router = APIRouter(prefix="/atendimentos", tags=["Atendimentos (Chats)"])
 agente = AgenteSusane()

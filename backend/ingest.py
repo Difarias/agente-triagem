@@ -1,12 +1,14 @@
 import os
+from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 
 # Caminhos
-PDF_PATH = os.path.join("data", "protocolo_sesab.pdf")
-CHROMA_PATH = "chroma_db"
+BACKEND_PATH = Path(__file__).resolve().parent
+PDF_PATH = BACKEND_PATH / "data" / "protocolo_sesab.pdf"
+CHROMA_PATH = str(BACKEND_PATH / "chroma_db")
 
 def processar_protocolo():
     if not os.path.exists(PDF_PATH):

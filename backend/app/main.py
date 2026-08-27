@@ -1,8 +1,8 @@
 from fastapi import FastAPI
-from app.database import engine, Base
+from .database import engine, Base
 from fastapi.middleware.cors import CORSMiddleware
-import app.models as models
-from app.routers import auth, atendimentos
+from . import models
+from .routers import auth, atendimentos
 
 # Cria as tabelas automaticamente no PostgreSQL
 Base.metadata.create_all(bind=engine)

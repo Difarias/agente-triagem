@@ -4,11 +4,12 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from pydantic import BaseModel, Field
 from typing import Optional
+from pathlib import Path
 import json
 import re
 from datetime import datetime, date
 
-CHROMA_PATH = "chroma_db"
+CHROMA_PATH = str(Path(__file__).resolve().parents[1].parent / "chroma_db")
 
 # Schema de Extração de Dados do Paciente via IA
 class DadosPacienteExtraidos(BaseModel):
