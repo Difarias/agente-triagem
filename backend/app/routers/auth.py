@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from pwdlib import PasswordHash
 from pwdlib.hashers.bcrypt import BcryptHasher
 
-from app.database import get_db
-from app.models import Enfermeiro
-from app.schemas import EnfermeiroCreate, EnfermeiroResponse, LoginSchema
+from ..database import get_db
+from ..models import Enfermeiro
+from ..schemas import EnfermeiroCreate, EnfermeiroResponse, LoginSchema
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
