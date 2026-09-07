@@ -108,6 +108,27 @@ def enviar_mensagem_chat(ate_id: int, dados: MensagemCreate, db: Session = Depen
 def obter_historico_chat(ate_id: int, db: Session = Depends(get_db)):
     return db.query(MensagemChat).filter(MensagemChat.msg_ate_id == ate_id).order_by(MensagemChat.msg_criado_em.asc()).all()
 
+@router.delete("/{ate_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_atendimento(ate_id: int, db: Session = Depends(get_db)):
+    atendimento = db.query(Atendimento).filter(Atendimento.ate_id == ate_id).first()
+    if not atendimento:
+        raise HTTPException(status_code=404, detail="Atendimento não encontrado.")
+
+    paciente_id = atendimento.ate_pac_id
+    db.query(MensagemChat).filter(MensagemChat.msg_ate_id == ate_id).delete(synchronize_session=False)
+    db.delete(atendimento)
+    db.flush()
+
+    paciente_em_outro_atendimento = db.query(Atendimento).filter(
+        Atendimento.ate_pac_id == paciente_id
+    ).first()
+    if not paciente_em_outro_atendimento:
+        paciente = db.query(Paciente).filter(Paciente.pac_id == paciente_id).first()
+        if paciente:
+            db.delete(paciente)
+
+    db.commit()
+
 @router.patch("/{ate_id}/concluir", response_model=AtendimentoResponse)
 def concluir_atendimento(ate_id: int, dados: AtendimentoConcluir, db: Session = Depends(get_db)):
     atendimento = db.query(Atendimento).filter(Atendimento.ate_id == ate_id).first()

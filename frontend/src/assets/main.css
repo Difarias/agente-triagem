@@ -20,16 +20,16 @@
 
 /* TEMA CLARO - CORRIGIDO */
 [data-theme="light"] {
-  --bg-primary: #f1f5f9;
+  --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;
-  --bg-card: #f8fafc;
-  --bg-chat-user: #e0e7ff;
-  --bg-chat-ia: #f1f5f9;
+  --bg-card: #f1f5f9;
+  --bg-chat-user: #e8eefc;
+  --bg-chat-ia: #f8fafc;
   --text-main: #0f172a;          /* Escuro para leitura perfeita */
   --text-muted: #64748b;         /* Cinza médio legível */
   --text-inverse: #ffffff;
   --border-color: #e2e8f0;
-  --accent-color: #2563eb;
+  --accent-color: #1e40af;
 }
 
 * {

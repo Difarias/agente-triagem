@@ -44,7 +44,7 @@ class AtendimentoCreate(BaseModel):
     ate_dados_iniciais: str
 
 class AtendimentoConcluir(BaseModel):
-    ate_classificacao_final: str # Ex: "Vermelho", "Laranja", "Amarelo", "Verde", "Azul"
+    ate_classificacao_final: str # Ex: "Vermelho", "Amarelo", "Verde", "Azul"
 
 # Schema do Paciente
 class PacienteResponse(BaseModel):
