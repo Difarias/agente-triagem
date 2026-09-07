@@ -12,17 +12,11 @@
       </div>
 
       <div class="header-right">
+        <nav class="header-nav" aria-label="Navegação principal">
+          <button class="header-nav-link active" type="button">Atendimento</button>
+          <button class="header-nav-link" type="button" @click="$emit('abrir-sobre')">Sobre</button>
+        </nav>
         <span class="sub-title">Copiloto de Apoio à Triagem Clínica</span>
-        
-        <!-- MENU SUSPENSO (DROPDOWN) -->
-        <div class="header-dropdown">
-          <button class="dropdown-btn" @click.stop="menuHeaderAberto = !menuHeaderAberto">
-            ⚙️ Opções ▾
-          </button>
-          <ul v-if="menuHeaderAberto" class="dropdown-menu">
-            <li @click="$emit('abrir-sobre')">Sobre</li>
-          </ul>
-        </div>
       </div>
     </header>
 
@@ -40,10 +34,27 @@
 
         <!-- LISTA DE ATENDIMENTOS (RECENTES) -->
         <div class="sidebar-recentes">
-          <span class="secao-label">Recentes</span>
+          <div class="recentes-header">
+            <span class="secao-label">Recentes</span>
+            <span class="recentes-count">{{ filteredChats.length }}</span>
+          </div>
+          <div class="filtros-chats">
+            <label class="busca-chats">
+              <Search :size="14" aria-hidden="true" />
+              <input v-model="filtroTexto" type="search" placeholder="Buscar atendimento" aria-label="Buscar atendimento" />
+            </label>
+            <select v-model="filtroStatus" class="filtro-status" aria-label="Filtrar por classificação">
+              <option value="todos">Todos</option>
+              <option value="em-andamento">Em Triagem</option>
+              <option value="vermelho">Vermelho</option>
+              <option value="amarelo">Amarelo</option>
+              <option value="verde">Verde</option>
+              <option value="azul">Azul</option>
+            </select>
+          </div>
           <ul class="lista-chats" :key="chats.length">
             <li 
-              v-for="chat in chats" 
+              v-for="chat in filteredChats" 
               :key="chat.ate_id"
               :class="['chat-item', { active: chatAtual?.ate_id === chat.ate_id }]"
               @click="selecionarChat(chat)"
@@ -61,6 +72,15 @@
               <span v-else class="chat-status em-andamento">
                 Em Triagem
               </span>
+              <button
+                class="btn-excluir-chat"
+                type="button"
+                title="Excluir atendimento"
+                :aria-label="`Excluir ${obterNomeExibicao(chat)}`"
+                @click.stop="excluirChat(chat)"
+              >
+                <Trash2 :size="15" stroke-width="2" />
+              </button>
             </li>
           </ul>
         </div>
@@ -120,6 +140,9 @@
                       {{ msg.msg_remetente === 'enfermeiro' ? `👤 ${enfermeiro.enf_nome.toUpperCase()}` : '🤖 SUSANE (COPILOTO IA)' }}
                     </span>
                     <div class="bubble-content" v-html="formatarMensagem(msg.msg_conteudo)"></div>
+                    <time v-if="formatarHorario(msg.msg_criado_em)" class="bubble-time" :datetime="msg.msg_criado_em">
+                      {{ formatarHorario(msg.msg_criado_em) }}
+                    </time>
                   </div>
                 </div>
 
@@ -157,11 +180,22 @@
             <div class="card-prontuario">
               <div class="card-header-prontuario">
                 <span>📄 RESUMO ESTRUTURADO PARA PRONTUÁRIO</span>
+                <small class="prontuario-fonte">Respostas ancoradas no protocolo da SESAB 2017</small>
               </div>
               <div class="prontuario-content">
                 <div class="paciente-info-strip" v-if="paciente.pac_nome">
                   <div><strong>Nome:</strong> {{ paciente.pac_nome }}</div>
                   <div><strong>Sexo:</strong> {{ paciente.pac_sexo || 'N/I' }}</div>
+                  <button
+                    class="btn-copiar-prontuario"
+                    type="button"
+                    :title="prontuarioCopiado ? 'Prontuário copiado' : 'Copiar prontuário'"
+                    :aria-label="prontuarioCopiado ? 'Prontuário copiado' : 'Copiar prontuário'"
+                    @click="copiarProntuario"
+                  >
+                    <Check v-if="prontuarioCopiado" :size="14" />
+                    <Copy v-else :size="14" />
+                  </button>
                 </div>
                 <div class="prontuario-texto bubble-content" v-html="resumoFormatado"></div>
               </div>
@@ -191,6 +225,7 @@
             :class="['btn-cor', cor.classe, { selected: corSelecionada === cor.nome }]"
             @click="corSelecionada = cor.nome"
           >
+            <Check v-if="corSelecionada === cor.nome" :size="15" stroke-width="3" />
             {{ cor.nome }}
           </button>
         </div>
@@ -207,6 +242,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { marked } from 'marked';
+import { Check, Copy, Search, Trash2 } from 'lucide-vue-next';
 import api from '../services/api';
 
 const props = defineProps({ enfermeiro: Object });
@@ -214,7 +250,6 @@ defineEmits(['logout']);
 
 const modoEscuro = ref(false);
 const menuPerfilAberto = ref(false);
-const menuHeaderAberto = ref(false);
 const logoExiste = ref(true);
 
 const chats = ref([]);
@@ -225,6 +260,9 @@ const novaMensagem = ref('');
 const carregando = ref(false);
 const enviando = ref(false);
 const messagesBox = ref(null);
+const prontuarioCopiado = ref(false);
+const filtroTexto = ref('');
+const filtroStatus = ref('todos');
 
 const modalConclusaoAberto = ref(false);
 const corSelecionada = ref('');
@@ -260,6 +298,20 @@ const obterNomeExibicao = (chat) => {
   }
   return `Atendimento #${chat.ate_id}`;
 };
+
+const filteredChats = computed(() => {
+  const texto = filtroTexto.value.trim().toLowerCase();
+
+  return chats.value.filter((chat) => {
+    const nome = obterNomeExibicao(chat).toLowerCase();
+    const titulo = `atendimento #${chat.ate_id}`;
+    const status = chat.ate_classificacao_final?.toLowerCase() || 'em-andamento';
+    const correspondeTexto = !texto || nome.includes(texto) || titulo.includes(texto);
+    const correspondeStatus = filtroStatus.value === 'todos' || status === filtroStatus.value;
+
+    return correspondeTexto && correspondeStatus;
+  });
+});
 
 const carregarChats = async () => {
   try {
@@ -308,6 +360,25 @@ const iniciarNovoChat = async () => {
 const selecionarChat = async (chat) => {
   chatAtual.value = chat;
   await carregarMensagens(chat.ate_id);
+};
+
+const excluirChat = async (chat) => {
+  const nomeChat = obterNomeExibicao(chat);
+  if (!window.confirm(`Deseja excluir o atendimento ${nomeChat}? Essa ação não pode ser desfeita.`)) return;
+
+  try {
+    await api.delete(`/atendimentos/${chat.ate_id}`);
+    chats.value = chats.value.filter((item) => item.ate_id !== chat.ate_id);
+
+    if (chatAtual.value?.ate_id === chat.ate_id) {
+      chatAtual.value = null;
+      paciente.value = {};
+      mensagens.value = [];
+    }
+  } catch (err) {
+    console.error('Erro ao excluir atendimento:', err);
+    alert('Não foi possível excluir o atendimento.');
+  }
 };
 
 const carregarMensagens = async (ateId) => {
@@ -386,6 +457,20 @@ const scrollToBottom = () => {
 
 const formatarMensagem = (texto) => texto ? marked.parse(texto, { breaks: true }) : '';
 
+const formatarHorario = (data) => {
+  if (!data) return '';
+
+  const dataMensagem = typeof data === 'number'
+    ? new Date(data)
+    : new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(data) ? data : `${data}Z`);
+  if (Number.isNaN(dataMensagem.getTime())) return '';
+
+  return dataMensagem.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 const classifCor = computed(() => chatAtual.value?.ate_classificacao_final || 'EM ANÁLISE');
 
 const classifTempo = computed(() => {
@@ -411,8 +496,33 @@ const resumoFormatado = computed(() => {
   return 'Aguardando informações do atendimento...';
 });
 
+const copiarProntuario = async () => {
+  if (!chatAtual.value) return;
+
+  const linhasPaciente = [];
+  if (paciente.value.pac_nome) linhasPaciente.push(`Nome: ${paciente.value.pac_nome}`);
+  if (paciente.value.pac_sexo) linhasPaciente.push(`Sexo: ${paciente.value.pac_sexo}`);
+
+  const resumo = chatAtual.value.ate_dados_iniciais?.trim() || 'Aguardando informações do atendimento...';
+  const texto = [
+    'RESUMO ESTRUTURADO PARA PRONTUÁRIO',
+    linhasPaciente.length ? linhasPaciente.join('\n') : '',
+    resumo
+  ].filter(Boolean).join('\n\n');
+
+  try {
+    await navigator.clipboard.writeText(texto);
+    prontuarioCopiado.value = true;
+    window.setTimeout(() => {
+      prontuarioCopiado.value = false;
+    }, 2000);
+  } catch (err) {
+    console.error('Erro ao copiar prontuário:', err);
+    alert('Não foi possível copiar o prontuário.');
+  }
+};
+
 const fecharMenusFora = (e) => {
-  if (!e.target.closest('.header-dropdown')) menuHeaderAberto.value = false;
   if (!e.target.closest('.user-profile-wrapper')) menuPerfilAberto.value = false;
 };
 
@@ -451,12 +561,12 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 1.2rem;
-  background-color: #1e40af;
+  padding: 0.75rem 1.4rem;
+  background-color: #0f172a;
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   z-index: 100;
-  height: 58px;
+  min-height: 64px;
   flex-shrink: 0;
 }
 
@@ -500,11 +610,11 @@ onUnmounted(() => {
 .badge-prototipo {
   font-size: 0.6rem;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   color: #e0f2fe;
   padding: 0.15rem 0.5rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .header-right {
@@ -520,69 +630,20 @@ onUnmounted(() => {
 }
 
 /* DROPDOWN NO HEADER */
-.header-dropdown {
-  position: relative;
+.header-nav { display: flex; align-items: center; gap: 1.15rem; }
+.header-nav-link {
+  position: relative; padding: 0.45rem 0.05rem; border: 0; background: transparent;
+  color: #cbd5e1; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  transition: color 0.2s ease;
 }
-
-.dropdown-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-  padding: 0.35rem 0.8rem;
-  border-radius: 15px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
+.header-nav-link::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+  height: 2px; border-radius: 999px; background: #93c5fd;
+  transform: scaleX(0); transform-origin: center; transition: transform 0.2s ease;
 }
-
-.dropdown-btn:hover {
-  background: rgba(0, 0, 0, 0.25);
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.dropdown-menu {
-  position: absolute;
-  right: 0;
-  top: 120%;
-  background-color: #ffffff;
-  color: #253b1e;
-  list-style: none;
-  padding: 0.3rem;
-  margin: 0;
-  border-radius: 15px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  min-width: 140px;
-  z-index: 200;
-  border: 1px solid #e2e8f0;
-}
-
-[data-theme="dark"] .dropdown-menu {
-  background-color: #1e293b;
-  color: #f8fafc;
-  border-color: #334155;
-}
-
-.dropdown-menu li {
-  padding: 0.5rem 0.8rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-  border-radius: 16px;
-  border: 1px solid transparent;
-  transition: all 0.15s ease;
-}
-
-.dropdown-menu li:hover {
-  background-color: rgba(0, 0, 0, 0.06);
-  border-color: rgba(0, 0, 0, 0.1);
-  color: #1e40af;
-}
-
-[data-theme="dark"] .dropdown-menu li:hover {
-  background-color: rgba(0, 0, 0, 0.3);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: #38bdf8;
-}
+.header-nav-link:hover, .header-nav-link.active { color: #ffffff; }
+.header-nav-link:hover::after, .header-nav-link.active::after { transform: scaleX(1); }
+.header-nav-link:focus-visible { outline: 2px solid #93c5fd; outline-offset: 4px; border-radius: 3px; }
 
 /* ==================================================
    2. CORPO DA APLICAÇÃO (SIDEBAR + WORKSPACE)
@@ -590,7 +651,7 @@ onUnmounted(() => {
 .main-body {
   display: flex;
   flex: 1;
-  height: calc(100vh - 58px);
+  height: calc(100vh - 64px);
   overflow: hidden;
 }
 
@@ -602,7 +663,7 @@ onUnmounted(() => {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  padding: 0.8rem 0.6rem;
+  padding: 1rem 0.75rem;
   user-select: none;
 }
 
@@ -611,9 +672,9 @@ onUnmounted(() => {
 /* BOTAO NOVO ATENDIMENTO */
 .nav-item {
   display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.55rem 0.7rem; 
-  border-radius: 15px; 
-  border: 1px solid var(--border-color);
+  padding: 0.7rem 0.8rem; 
+  border-radius: 10px; 
+  border: 1px solid transparent;
   font-size: 0.85rem;
   font-weight: 500; 
   color: var(--text-main); 
@@ -631,10 +692,19 @@ onUnmounted(() => {
   border-color: rgba(255, 255, 255, 0.15);
 }
 
-.btn-novo-chat { background: transparent; width: 100%; text-align: left; }
+.btn-novo-chat { background: var(--accent-color); color: #ffffff; width: 100%; text-align: left; box-shadow: 0 4px 10px rgba(30, 64, 175, 0.18); }
+.btn-novo-chat:hover { background: #1d4ed8; border-color: transparent; transform: translateY(-1px); }
 
 .sidebar-recentes { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.recentes-header { display: flex; align-items: center; justify-content: space-between; padding-right: 0.65rem; }
 .secao-label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); padding: 0.4rem 0.7rem; margin-bottom: 0.2rem; }
+.recentes-count { min-width: 1.25rem; padding: 0.12rem 0.35rem; border-radius: 999px; background: var(--bg-card); color: var(--text-muted); font-size: 0.62rem; text-align: center; }
+.filtros-chats { display: flex; gap: 0.35rem; padding: 0 0.35rem 0.7rem; }
+.busca-chats { min-width: 0; flex: 1; display: flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-muted); }
+.busca-chats input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-main); font-size: 0.7rem; }
+.busca-chats input::placeholder { color: var(--text-muted); }
+.filtro-status { width: 5.2rem; padding: 0.4rem 0.25rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-main); font-size: 0.65rem; outline: 0; }
+.busca-chats:focus-within, .filtro-status:focus-visible { border-color: var(--accent-color); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12); }
 .lista-chats { list-style: none; }
 
 /* BLOCOS DOS ATENDIMENTOS RECENTES */
@@ -642,8 +712,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.55rem 0.7rem;
-  border-radius: 15px;
+  padding: 0.65rem 0.7rem;
+  border-radius: 10px;
   border: 1px solid transparent;
   font-size: 0.8rem;
   cursor: pointer;
@@ -663,8 +733,8 @@ onUnmounted(() => {
 }
 
 .chat-item.active {
-  background-color: var(--bg-card);
-  border-color: var(--border-color);
+  background-color: #eaf0ff;
+  border-color: #c7d2fe;
   font-weight: 600;
 }
 
@@ -685,18 +755,33 @@ onUnmounted(() => {
 }
 
 .chat-status {
-  font-size: 0.7rem;
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.chat-status.em-andamento { color: var(--text-muted); }
-.chat-status.vermelho { color: var(--vermelho); }
-.chat-status.amarelo { color: var(--amarelo); }
-.chat-status.verde { color: var(--verde); }
-.chat-status.azul { color: var(--azul); }
+.chat-status.em-andamento { background: #fef3c7; color: #92400e; }
+.chat-status.vermelho { background: #fee2e2; color: #b91c1c; }
+.chat-status.amarelo { background: #fef3c7; color: #92400e; }
+.chat-status.verde { background: #dcfce7; color: #166534; }
+.chat-status.azul { background: #dbeafe; color: #1d4ed8; }
+
+[data-theme="dark"] .chat-item.active {
+  background-color: #334155;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .chat-item.active .chat-nome,
+[data-theme="dark"] .chat-item.active .chat-sep {
+  color: #f8fafc;
+}
 
 .sidebar-footer {
   padding-top: 0.6rem; border-top: 1px solid var(--border-color);
@@ -773,23 +858,23 @@ onUnmounted(() => {
 .main-workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
 .workspace-grid {
-  flex: 1; display: grid; grid-template-columns: 1fr 320px;
-  gap: 0.8rem; padding: 0.8rem; overflow: hidden;
+  flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 1rem; padding: 1rem; overflow: hidden;
 }
 
 /* CHAT REFINADO */
 .panel-chat {
-  background-color: var(--bg-secondary); border-radius: 8px;
+  background-color: var(--bg-secondary); border-radius: 12px;
   border: 1px solid var(--border-color); display: flex; flex-direction: column; overflow: hidden;
 }
 
 .panel-header {
-  padding: 0.6rem 1rem; border-bottom: 1px solid var(--border-color);
+  padding: 0.85rem 1.1rem; border-bottom: 1px solid var(--border-color);
   display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
 }
 
 .messages-scroll {
-  flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;
+  flex: 1; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.9rem;
 }
 
 .empty-state {
@@ -807,17 +892,20 @@ onUnmounted(() => {
 .row-ia { justify-content: flex-start; }
 
 .chat-bubble {
-  max-width: 75%; padding: 0.65rem 0.85rem; border-radius: 8px;
-  border: 1px solid var(--border-color); font-size: 0.85rem; line-height: 1.4;
+  max-width: 78%; padding: 0.85rem 1rem; border-radius: 14px;
+  border: 1px solid transparent; font-size: 0.85rem; line-height: 1.5; position: relative;
 }
 
 .row-profissional .chat-bubble {
-  background-color: var(--bg-chat-user); color: var(--text-main); text-align: right;
+  background-color: var(--bg-chat-user); color: var(--text-main); text-align: right; border-bottom-right-radius: 5px;
 }
 
 .row-ia .chat-bubble {
-  background-color: var(--bg-chat-ia); color: var(--text-main); text-align: left;
+  background-color: var(--bg-chat-ia); color: var(--text-main); text-align: left; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05); border-color: #eef2f7; border-bottom-left-radius: 5px;
 }
+
+.bubble-time { display: block; margin-top: 0.45rem; color: #64748b; font-size: 0.62rem; line-height: 1; text-align: right; }
+[data-theme="dark"] .bubble-time { color: #94a3b8; }
 
 .bubble-tag {
   font-size: 0.65rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 0.25rem;
@@ -866,17 +954,17 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
-.chat-input-area { padding: 0.6rem 0.8rem; border-top: 1px solid var(--border-color); background: var(--bg-secondary); }
+.chat-input-area { padding: 0.85rem 1rem 1rem; border-top: 1px solid var(--border-color); background: var(--bg-secondary); }
 .chat-input-area form { display: flex; gap: 0.5rem; }
 
 .chat-input-area input {
-  flex: 1; padding: 0.5rem 0.8rem; border-radius: 15px; border: 1px solid var(--border-color);
+  flex: 1; padding: 0.7rem 0.9rem; border-radius: 10px; border: 1px solid var(--border-color);
   background: var(--bg-primary); color: var(--text-main); font-size: 0.85rem;
 }
 
 .chat-input-area button {
-  padding: 0 1rem; background: var(--accent-color); color: white;
-  border: none; border-radius: 15px; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+  padding: 0 1.1rem; background: var(--accent-color); color: white;
+  border: none; border-radius: 10px; font-weight: 600; font-size: 0.85rem; cursor: pointer;
   transition: opacity 0.2s;
 }
 
@@ -888,38 +976,59 @@ onUnmounted(() => {
 .panel-summary { display: flex; flex-direction: column; gap: 0.8rem; }
 
 .card-classificacao {
-  padding: 1rem; border-radius: 8px; text-align: center;
-  border: 1px solid var(--border-color); background-color: var(--bg-card);
+  padding: 1rem 1.1rem; border-radius: 10px; text-align: left;
+  border: 1px solid var(--border-color); border-left: 5px solid #94a3b8; background-color: #f8fafc;
 }
 
-.card-classificacao.em-análise { background-color: var(--bg-card); border: 1px dashed var(--border-color); }
-.card-classificacao.em-análise .card-status-title { color: var(--text-muted); }
-.card-classificacao.vermelho { background-color: var(--vermelho); color: white; }
-.card-classificacao.laranja { background-color: var(--laranja); color: white; }
-.card-classificacao.amarelo { background-color: var(--amarelo); color: #000; }
-.card-classificacao.verde { background-color: var(--verde); color: white; }
-.card-classificacao.azul { background-color: var(--azul); color: white; }
+.card-classificacao.em-análise { background-color: #f8fafc; border-left-color: #94a3b8; }
+.card-classificacao.em-análise .card-status-title { color: #475569; }
+.card-classificacao.vermelho { background-color: #fef2f2; border-left-color: #dc2626; color: #991b1b; }
+.card-classificacao.vermelho .card-status-title { color: #991b1b; }
+.card-classificacao.laranja .card-status-title { color: #9a3412; }
+.card-classificacao.amarelo { background-color: #fffbeb; border-left-color: #d97706; color: #92400e; }
+.card-classificacao.amarelo .card-status-title { color: #92400e; }
+.card-classificacao.verde { background-color: #f0fdf4; border-left-color: #16a34a; color: #166534; }
+.card-classificacao.verde .card-status-title { color: #166534; }
+.card-classificacao.azul { background-color: #eff6ff; border-left-color: #2563eb; color: #1e40af; }
+.card-classificacao.azul .card-status-title { color: #1e40af; }
 
 .card-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px; display: block; opacity: 0.9; }
-.card-status-title { font-size: 1.4rem; font-weight: 800; margin: 0.2rem 0; }
+.card-status-title { font-size: 1.35rem; font-weight: 800; margin: 0.2rem 0; }
 .card-status-sub { font-size: 0.75rem; opacity: 0.95; }
 
 .card-prontuario {
   flex: 1; background-color: var(--bg-secondary); border: 1px solid var(--border-color);
-  border-radius: 15px; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
-.card-header-prontuario { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border-color); font-size: 0.7rem; font-weight: 700; color: var(--text-muted); }
+.card-header-prontuario { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; gap: 0.15rem; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); }
+.prontuario-fonte { font-size: 0.60rem; font-weight: 400; line-height: 1.2; text-align: center; white-space: nowrap; }
+.btn-copiar-prontuario { flex-shrink: 0; width: 1.6rem; height: 1.6rem; padding: 0.25rem; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-main); cursor: pointer; }
+.btn-copiar-prontuario:hover { background: var(--bg-card); color: var(--accent-color, #2563eb); }
 .prontuario-content { padding: 0.8rem; font-size: 0.8rem; overflow-y: auto; color: var(--text-main); }
 
 .paciente-info-strip {
-  display: flex; gap: 1rem; padding-bottom: 0.5rem; margin-bottom: 0.5rem;
+  display: flex; align-items: center; gap: 0.65rem; padding: 0.55rem 0; margin-bottom: 0.7rem;
   border-bottom: 1px solid var(--border-color); font-size: 0.75rem; color: var(--text-muted);
 }
 
+.paciente-info-strip > div { white-space: nowrap; }
+.paciente-info-strip .btn-copiar-prontuario { margin-left: auto; }
+
+.btn-excluir-chat {
+  margin-left: auto; padding: 0.25rem; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: transparent; color: var(--text-muted); cursor: pointer; opacity: 0.65;
+  transition: color 0.2s, opacity 0.2s;
+}
+
+.chat-item:hover .btn-excluir-chat,
+.chat-item:focus-within .btn-excluir-chat { opacity: 1; }
+
+.btn-excluir-chat:hover { color: #dc2626; }
+
 .btn-concluir-triagem {
-  padding: 0.7rem; background-color: var(--verde); color: white; border: none;
-  border-radius: 15px; font-weight: bold; font-size: 0.8rem; cursor: pointer; transition: opacity 0.2s;
+  padding: 0.75rem; background-color: #166534; color: white; border: none;
+  border-radius: 10px; font-weight: bold; font-size: 0.8rem; cursor: pointer; transition: opacity 0.2s;
 }
 
 .btn-concluir-triagem:hover {
@@ -932,17 +1041,98 @@ onUnmounted(() => {
   display: flex; justify-content: center; align-items: center; z-index: 1000;
 }
 .modal-card {
-  background: var(--bg-secondary); padding: 1.2rem; border-radius: 15px; width: 380px;
+  background: var(--bg-secondary); padding: 1.2rem; border-radius: 12px; width: 380px;
   border: 1px solid var(--border-color); color: var(--text-main); box-shadow: 0 10px 25px rgba(0,0,0,0.2);
 }
 .color-options { display: flex; flex-direction: column; gap: 0.4rem; margin: 1rem 0; }
-.btn-cor { padding: 0.5rem; border-radius: 15px; border: none; color: white; font-weight: bold; cursor: pointer; }
+.btn-cor { padding: 0.5rem; border-radius: 8px; border: none; color: white; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.35rem; transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease; }
+.btn-cor:hover { filter: brightness(0.9); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2); }
+.btn-cor.selected { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 4px 10px rgba(15, 23, 42, 0.25); transform: translateY(-1px); }
+.btn-cor:focus-visible, .btn-cancel:focus-visible, .btn-confirm:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 .btn-cor.vermelho { background: var(--vermelho); }
-.btn-cor.laranja { background: var(--laranja); }
 .btn-cor.amarelo { background: var(--amarelo); color: black; }
 .btn-cor.verde { background: var(--verde); }
 .btn-cor.azul { background: var(--azul); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-.btn-cancel, .btn-confirm { padding: 0.4rem 0.8rem; border-radius: 15px; border: none; cursor: pointer; font-size: 0.8rem; }
+.btn-cancel, .btn-confirm { padding: 0.5rem 0.85rem; border-radius: 8px; border: none; cursor: pointer; font-size: 0.8rem; transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease; }
+.btn-cancel:hover, .btn-confirm:hover:not(:disabled) { filter: brightness(0.9); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18); }
 .btn-confirm { background: var(--accent-color, #1e40af); color: white; }
+.btn-confirm:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* Resumo organizado em blocos por seção, sem cartões para cada item. */
+.prontuario-texto :deep(h3) {
+  margin: 0.85rem 0 0;
+  padding: 0.55rem 0.7rem 0.25rem;
+  border: 1px solid #e2e8f0;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.prontuario-texto :deep(h3:first-child) { margin-top: 0; }
+.prontuario-texto :deep(h3 + p),
+.prontuario-texto :deep(h3 + ul),
+.prontuario-texto :deep(h3 + ol) {
+  margin: 0;
+  padding: 0.35rem 0.7rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  background: #ffffff;
+}
+.prontuario-texto :deep(ul),
+.prontuario-texto :deep(ol) { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.55rem; }
+.prontuario-texto :deep(li) { padding: 0.15rem 0; border: 0; background: transparent; }
+.prontuario-texto :deep(li)::before { content: '-'; display: inline-block; margin-right: 0.4rem; color: #64748b; font-weight: 700; }
+.prontuario-texto :deep(li strong) { display: inline; margin-right: 0.25rem; color: #64748b; font-size: 0.72rem; }
+
+[data-theme="dark"] .row-ia .chat-bubble {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .row-profissional .chat-bubble {
+  background-color: #1d4ed8;
+  color: #eff6ff;
+}
+
+[data-theme="dark"] .card-classificacao.em-análise { background-color: #1e293b; border-left-color: #94a3b8; color: #cbd5e1; }
+[data-theme="dark"] .card-classificacao.em-análise .card-status-title { color: #e2e8f0; }
+[data-theme="dark"] .card-classificacao.vermelho { background-color: #3f1d24; border-left-color: #f87171; color: #fecaca; }
+[data-theme="dark"] .card-classificacao.vermelho .card-status-title { color: #fecaca; }
+[data-theme="dark"] .card-classificacao.amarelo { background-color: #3b2f0b; border-left-color: #fbbf24; color: #fef3c7; }
+[data-theme="dark"] .card-classificacao.amarelo .card-status-title { color: #fef3c7; }
+[data-theme="dark"] .card-classificacao.verde { background-color: #123522; border-left-color: #4ade80; color: #bbf7d0; }
+[data-theme="dark"] .card-classificacao.verde .card-status-title { color: #bbf7d0; }
+[data-theme="dark"] .card-classificacao.azul { background-color: #172554; border-left-color: #60a5fa; color: #bfdbfe; }
+[data-theme="dark"] .card-classificacao.azul .card-status-title { color: #bfdbfe; }
+
+[data-theme="dark"] .card-prontuario,
+[data-theme="dark"] .prontuario-content { color: #e2e8f0; }
+[data-theme="dark"] .prontuario-texto :deep(h3) { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+[data-theme="dark"] .prontuario-texto :deep(h3 + p),
+[data-theme="dark"] .prontuario-texto :deep(h3 + ul),
+[data-theme="dark"] .prontuario-texto :deep(h3 + ol) { background: #111827; border-color: #334155; color: #e2e8f0; }
+[data-theme="dark"] .prontuario-texto :deep(li) { background: transparent; border-color: transparent; color: #e2e8f0; }
+[data-theme="dark"] .prontuario-texto :deep(li)::before { color: #cbd5e1; }
+[data-theme="dark"] .prontuario-texto :deep(li strong) { color: #cbd5e1; }
+[data-theme="dark"] .paciente-info-strip { color: #cbd5e1; border-color: #334155; }
+
+@media (max-width: 1100px) {
+  .workspace-grid { grid-template-columns: minmax(0, 1fr) 350px; }
+  .sub-title { display: none; }
+}
+
+@media (max-width: 820px) {
+  .main-body { overflow: auto; }
+  .sidebar-gpt { width: 210px; min-width: 210px; }
+  .workspace-grid { grid-template-columns: 1fr; overflow: auto; }
+  .panel-chat { min-height: 62vh; }
+  .panel-summary { min-height: 520px; }
+}
 </style>

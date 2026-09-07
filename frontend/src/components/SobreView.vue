@@ -3,17 +3,19 @@
     <!-- 1. HEADER TOPO-A-TOPO (IDENTICO AO DASHBOARD) -->
     <header class="top-header-full">
       <div class="header-left">
-        <span class="brand-logo-fallback">🩺</span>
+        <img src="../assets/mtilab_logo.jpg" alt="Logo MTILab" class="header-logo" v-if="logoExiste" @error="logoExiste = false" />
+        <span v-else class="brand-logo-fallback">🩺</span>
         <div class="header-brand-title">
-          <h1>Susane Triagem</h1>
           <span class="badge-prototipo">PROTÓTIPO DE VALIDAÇÃO CIENTÍFICA</span>
         </div>
       </div>
 
       <div class="header-right">
-        <button class="btn-voltar" @click="voltar">
-          ← Voltar ao Atendimento
-        </button>
+        <nav class="header-nav" aria-label="Navegação principal">
+          <button class="header-nav-link" type="button" @click="voltar">Atendimento</button>
+          <button class="header-nav-link active" type="button">Sobre</button>
+        </nav>
+        <span class="sub-title">Copiloto de Apoio à Triagem Clínica</span>
       </div>
     </header>
 
@@ -76,6 +78,7 @@
 import { ref } from 'vue';
 
 const emit = defineEmits(['voltar']);
+const logoExiste = ref(true);
 
 // Função auxiliar para carregar imagens estáticas dinamicamente no Vite
 const getImageUrl = (name) => {
@@ -136,44 +139,48 @@ const obterIniciais = (nome) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 1.2rem;
-  background-color: #1e40af;
+  padding: 0.75rem 1.4rem;
+  background-color: #0f172a;
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  height: 58px;
+  min-height: 64px;
   flex-shrink: 0;
 }
 
 .header-left { display: flex; align-items: center; gap: 0.8rem; }
+.header-logo { height: 42px; width: auto; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); }
 .brand-logo-fallback { font-size: 1.4rem; }
 .header-brand-title { display: flex; align-items: center; gap: 0.6rem; }
-.header-brand-title h1 { font-size: 1.1rem; font-weight: 700; margin: 0; color: #ffffff; }
+.header-right { display: flex; align-items: center; gap: 1.2rem; white-space: nowrap; }
 
 .badge-prototipo {
   font-size: 0.6rem;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   color: #e0f2fe;
   padding: 0.15rem 0.5rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-.btn-voltar {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-  padding: 0.4rem 0.9rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.header-nav { display: flex; align-items: center; gap: 1.15rem; }
+.header-nav-link {
+  position: relative; padding: 0.45rem 0.05rem; border: 0; background: transparent;
+  color: #cbd5e1; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  transition: color 0.2s ease;
 }
+.header-nav-link::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+  height: 2px; border-radius: 999px; background: #93c5fd;
+  transform: scaleX(0); transform-origin: center; transition: transform 0.2s ease;
+}
+.header-nav-link:hover, .header-nav-link.active { color: #ffffff; }
+.header-nav-link:hover::after, .header-nav-link.active::after { transform: scaleX(1); }
+.header-nav-link:focus-visible { outline: 2px solid #93c5fd; outline-offset: 4px; border-radius: 3px; }
+.sub-title { font-size: 0.85rem; color: #dbeafe; font-weight: 500; }
 
-.btn-voltar:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.5);
+@media (max-width: 1100px) {
+  .sub-title { display: none; }
 }
 
 /* CONTAINER PRINCIPAL DA LANDING PAGE */
@@ -249,12 +256,14 @@ const obterIniciais = (nome) => {
   flex-direction: column;
   align-items: center;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transform-origin: center;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
 }
 
 .team-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+  transform: translateY(-6px) scale(1.04);
+  border-color: #93c5fd;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.16);
 }
 
 .avatar-wrapper {
@@ -339,6 +348,52 @@ const obterIniciais = (nome) => {
 
 .inst-logo:hover {
   opacity: 1;
+}
+
+[data-theme="dark"] .sobre-layout {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .section-badge {
+  background-color: #1e3a8a;
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .main-title,
+[data-theme="dark"] .section-title,
+[data-theme="dark"] .institutional-card h3,
+[data-theme="dark"] .member-name {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .description,
+[data-theme="dark"] .institutional-card p {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .team-card,
+[data-theme="dark"] .institutional-card {
+  background-color: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.22);
+}
+
+[data-theme="dark"] .team-card:hover {
+  border-color: #60a5fa;
+  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.5);
+}
+
+[data-theme="dark"] .member-role {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .avatar-wrapper {
+  background-color: #334155;
+}
+
+[data-theme="dark"] .avatar-placeholder {
+  color: #bfdbfe;
 }
 
 @media (max-width: 640px) {
