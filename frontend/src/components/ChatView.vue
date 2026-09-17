@@ -652,6 +652,7 @@ onUnmounted(() => {
   display: flex;
   flex: 1;
   height: calc(100vh - 64px);
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -855,17 +856,17 @@ onUnmounted(() => {
 }
 
 /* WORKSPACE */
-.main-workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.main-workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
 .workspace-grid {
-  flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 420px;
+  flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 420px; grid-template-rows: minmax(0, 1fr);
   gap: 1rem; padding: 1rem; overflow: hidden;
 }
 
 /* CHAT REFINADO */
 .panel-chat {
   background-color: var(--bg-secondary); border-radius: 12px;
-  border: 1px solid var(--border-color); display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--border-color); display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden;
 }
 
 .panel-header {
@@ -874,7 +875,7 @@ onUnmounted(() => {
 }
 
 .messages-scroll {
-  flex: 1; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.9rem;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.9rem;
 }
 
 .empty-state {
@@ -954,7 +955,7 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
-.chat-input-area { padding: 0.85rem 1rem 1rem; border-top: 1px solid var(--border-color); background: var(--bg-secondary); }
+.chat-input-area { flex: 0 0 auto; padding: 0.85rem 1rem 1rem; border-top: 1px solid var(--border-color); background: var(--bg-secondary); }
 .chat-input-area form { display: flex; gap: 0.5rem; }
 
 .chat-input-area input {
